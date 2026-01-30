@@ -1,6 +1,9 @@
 import feedparser
 
-FEED_URL = "https://techcrunch.com/feed/"
+FEEDS = [
+    {"name": "TechCrunch", "url": "https://techcrunch.com/feed/"},
+    {"name": "VentureBeat", "url": "https://venturebeat.com/feed/"},
+]
 
 # Words that indicate seed funding
 SEED_KEYWORDS = ["seed funding", "seed round", "seed stage", "pre-seed"]
@@ -40,8 +43,10 @@ def filter_articles(entries):
     return results
 
 
-def display_article(entry):
+def display_article(entry, source_name=""):
     """Print a single article's details."""
+    if source_name:
+        print(f"Source:    {source_name}")
     print(f"Title:     {entry.get('title', 'N/A')}")
     print(f"Link:      {entry.get('link', 'N/A')}")
     print(f"Published: {entry.get('published', 'N/A')}")
@@ -49,25 +54,31 @@ def display_article(entry):
 
 
 def main():
-    print("Fetching TechCrunch RSS feed...\n")
-    entries = fetch_feed(FEED_URL)
+    all_filtered = []
 
-    if not entries:
-        print("No entries found in the feed.")
-        return
+    for feed in FEEDS:
+        print(f"Fetching {feed['name']} RSS feed...")
+        entries = fetch_feed(feed["url"])
 
-    print(f"Total articles in feed: {len(entries)}")
+        if not entries:
+            print(f"  No entries found in {feed['name']} feed.\n")
+            continue
 
-    filtered = filter_articles(entries)
-    print(f"Articles about AI + seed funding: {len(filtered)}\n")
+        print(f"  Total articles in feed: {len(entries)}")
+        filtered = filter_articles(entries)
+        print(f"  Articles about AI + seed funding: {len(filtered)}\n")
 
-    if not filtered:
+        for entry in filtered:
+            entry["_source"] = feed["name"]
+        all_filtered.extend(filtered)
+
+    if not all_filtered:
         print("No matching articles right now. Try again later!")
         return
 
     print("-" * 60)
-    for article in filtered:
-        display_article(article)
+    for article in all_filtered:
+        display_article(article, source_name=article.get("_source", ""))
 
 
 if __name__ == "__main__":
