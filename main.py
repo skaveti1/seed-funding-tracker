@@ -1,4 +1,5 @@
 import csv
+import os
 import re
 
 import feedparser
@@ -181,10 +182,12 @@ def main():
         display_article(article, source_name=article.get("_source", ""))
 
     filename = "results.csv"
-    with open(filename, "w", newline="") as f:
+    file_exists = os.path.isfile(filename)
+    with open(filename, "a", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["Source", "Title", "Link", "Published",
-                         "Funding Amount", "Investors", "Description"])
+        if not file_exists:
+            writer.writerow(["Source", "Title", "Link", "Published",
+                             "Funding Amount", "Investors", "Description"])
         for article in all_filtered:
             writer.writerow([
                 article.get("_source", ""),
@@ -195,7 +198,7 @@ def main():
                 article.get("_investors", ""),
                 article.get("_description", ""),
             ])
-    print(f"Results saved to {filename}")
+    print(f"Results appended to {filename}")
 
 
 if __name__ == "__main__":
