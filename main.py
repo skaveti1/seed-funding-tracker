@@ -8,6 +8,12 @@ from bs4 import BeautifulSoup
 FEEDS = [
     {"name": "TechCrunch", "url": "https://techcrunch.com/feed/"},
     {"name": "VentureBeat", "url": "https://venturebeat.com/feed/"},
+    {"name": "Crunchbase News", "url": "https://news.crunchbase.com/feed/"},
+    {"name": "SiliconANGLE", "url": "https://siliconangle.com/feed/"},
+    {"name": "GeekWire Startups", "url": "https://www.geekwire.com/startups/feed/"},
+    {"name": "The Verge AI", "url": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"},
+    {"name": "Ars Technica AI", "url": "https://arstechnica.com/ai/feed/"},
+    {"name": "Wired", "url": "https://www.wired.com/feed/rss"},
 ]
 
 # Words that indicate seed funding
