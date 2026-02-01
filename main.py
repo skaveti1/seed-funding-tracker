@@ -183,12 +183,25 @@ def main():
 
     filename = "results.csv"
     file_exists = os.path.isfile(filename)
+    existing_links = set()
+    if file_exists:
+        with open(filename, "r", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                existing_links.add(row.get("Link", ""))
+
+    new_articles = [a for a in all_filtered if a.get("link", "") not in existing_links]
+
+    if not new_articles:
+        print("No new articles to add (all duplicates).")
+        return
+
     with open(filename, "a", newline="") as f:
         writer = csv.writer(f)
         if not file_exists:
             writer.writerow(["Source", "Title", "Link", "Published",
                              "Funding Amount", "Investors", "Description"])
-        for article in all_filtered:
+        for article in new_articles:
             writer.writerow([
                 article.get("_source", ""),
                 article.get("title", ""),
@@ -198,7 +211,7 @@ def main():
                 article.get("_investors", ""),
                 article.get("_description", ""),
             ])
-    print(f"Results appended to {filename}")
+    print(f"{len(new_articles)} new result(s) appended to {filename}")
 
 
 if __name__ == "__main__":
