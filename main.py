@@ -267,12 +267,12 @@ def main():
     with open(filename, "a", newline="") as f:
         writer = csv.writer(f)
         if not file_exists:
-            writer.writerow(["Source", "Title", "Link", "Published",
+            writer.writerow(["Title", "Source", "Link", "Published",
                              "Funding Amount", "Investors", "Description"])
         for article in new_articles:
             writer.writerow([
-                article.get("_source", ""),
                 article.get("title", ""),
+                article.get("_source", ""),
                 article.get("link", ""),
                 article.get("published", ""),
                 article.get("_funding_amount", ""),
