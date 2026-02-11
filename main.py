@@ -1,10 +1,16 @@
 import csv
 import os
 import re
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 import feedparser
 import requests
 from bs4 import BeautifulSoup
+
+SENDER_EMAIL = "skaveti@gmail.com"
+RECIPIENT_EMAIL = "skaveti@gmail.com"
 
 FEEDS = [
     {"name": "TechCrunch", "url": "https://techcrunch.com/feed/"},
@@ -18,7 +24,15 @@ FEEDS = [
 ]
 
 # Words that indicate seed funding
-SEED_KEYWORDS = ["seed funding", "seed round", "seed stage", "pre-seed"]
+SEED_KEYWORDS = [
+    "seed funding", "seed round", "seed stage", "pre-seed",
+    "seed investment", "seed capital", "seed financing",
+    "seed money", "seed extension", "seed raise",
+    "angel round", "angel funding", "angel investment",
+    "early-stage funding", "early stage funding",
+    "raises seed", "raised seed", "closes seed", "closed seed",
+    "series seed",
+]
 
 # Words that indicate AI
 AI_KEYWORDS = ["artificial intelligence", " ai ", " ai-", " ai,", " ai."]
@@ -145,6 +159,60 @@ def display_article(entry, source_name=""):
     print()
 
 
+def send_email(articles):
+    """Send an email summary of new articles."""
+    app_password = os.environ.get("GMAIL_APP_PASSWORD")
+    if not app_password:
+        print("GMAIL_APP_PASSWORD not set — skipping email.")
+        return
+
+    subject = f"AI Seed Funding Alert: {len(articles)} new article(s)"
+
+    rows = ""
+    for a in articles:
+        rows += f"""
+        <tr>
+            <td style="padding:8px;border:1px solid #ddd;">{a.get('_source', '')}</td>
+            <td style="padding:8px;border:1px solid #ddd;">
+                <a href="{a.get('link', '')}">{a.get('title', '')}</a>
+            </td>
+            <td style="padding:8px;border:1px solid #ddd;">{a.get('_funding_amount', 'N/A')}</td>
+            <td style="padding:8px;border:1px solid #ddd;">{a.get('_investors', 'N/A')}</td>
+            <td style="padding:8px;border:1px solid #ddd;">{a.get('_description', '')}</td>
+        </tr>"""
+
+    html = f"""\
+    <html>
+    <body>
+    <h2>AI Seed Funding Tracker — {len(articles)} New Article(s)</h2>
+    <table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;">
+        <tr style="background:#f4f4f4;">
+            <th style="padding:8px;border:1px solid #ddd;">Source</th>
+            <th style="padding:8px;border:1px solid #ddd;">Title</th>
+            <th style="padding:8px;border:1px solid #ddd;">Amount</th>
+            <th style="padding:8px;border:1px solid #ddd;">Investors</th>
+            <th style="padding:8px;border:1px solid #ddd;">Description</th>
+        </tr>
+        {rows}
+    </table>
+    </body>
+    </html>"""
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = SENDER_EMAIL
+    msg["To"] = RECIPIENT_EMAIL
+    msg.attach(MIMEText(html, "html"))
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(SENDER_EMAIL, app_password)
+            server.sendmail(SENDER_EMAIL, RECIPIENT_EMAIL, msg.as_string())
+        print(f"Email sent to {RECIPIENT_EMAIL}")
+    except Exception as e:
+        print(f"Failed to send email: {e}")
+
+
 def main():
     all_filtered = []
 
@@ -212,6 +280,8 @@ def main():
                 article.get("_description", ""),
             ])
     print(f"{len(new_articles)} new result(s) appended to {filename}")
+
+    send_email(new_articles)
 
 
 if __name__ == "__main__":
