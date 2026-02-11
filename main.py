@@ -10,7 +10,7 @@ import requests
 from bs4 import BeautifulSoup
 
 SENDER_EMAIL = "skaveti@gmail.com"
-RECIPIENT_EMAIL = "skaveti@gmail.com"
+RECIPIENT_EMAIL = "shail@thefounder.vc"
 
 FEEDS = [
     {"name": "TechCrunch", "url": "https://techcrunch.com/feed/"},
