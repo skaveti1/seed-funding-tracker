@@ -172,10 +172,10 @@ def send_email(articles):
     for a in articles:
         rows += f"""
         <tr>
-            <td style="padding:8px;border:1px solid #ddd;">{a.get('_source', '')}</td>
             <td style="padding:8px;border:1px solid #ddd;">
                 <a href="{a.get('link', '')}">{a.get('title', '')}</a>
             </td>
+            <td style="padding:8px;border:1px solid #ddd;">{a.get('_source', '')}</td>
             <td style="padding:8px;border:1px solid #ddd;">{a.get('_funding_amount', 'N/A')}</td>
             <td style="padding:8px;border:1px solid #ddd;">{a.get('_investors', 'N/A')}</td>
             <td style="padding:8px;border:1px solid #ddd;">{a.get('_description', '')}</td>
@@ -187,8 +187,8 @@ def send_email(articles):
     <h2>AI Seed Funding Tracker — {len(articles)} New Article(s)</h2>
     <table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;">
         <tr style="background:#f4f4f4;">
-            <th style="padding:8px;border:1px solid #ddd;">Source</th>
             <th style="padding:8px;border:1px solid #ddd;">Title</th>
+            <th style="padding:8px;border:1px solid #ddd;">Source</th>
             <th style="padding:8px;border:1px solid #ddd;">Amount</th>
             <th style="padding:8px;border:1px solid #ddd;">Investors</th>
             <th style="padding:8px;border:1px solid #ddd;">Description</th>
