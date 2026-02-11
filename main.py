@@ -103,12 +103,77 @@ def fetch_article_text(url):
     return article.get_text(separator=" ", strip=True)
 
 
+INDUSTRY_KEYWORDS = {
+    "AI/ML": ["artificial intelligence", "machine learning", "deep learning", "neural network", "llm", "large language model"],
+    "Music": ["music", "audio", "sound", "streaming", "spotify"],
+    "Real Estate": ["real estate", "property", "housing", "mortgage", "realty"],
+    "Developer Tools": ["developer", "code", "github", "programming", "software development", "devops"],
+    "Robotics": ["robot", "humanoid", "automation", "manufacturing"],
+    "Healthcare": ["health", "medical", "biotech", "pharma", "clinical"],
+    "Fintech": ["fintech", "banking", "payment", "crypto", "blockchain", "financial"],
+    "Security": ["security", "cybersecurity", "privacy", "encryption"],
+    "Enterprise": ["enterprise", "saas", "b2b", "business software"],
+    "Consumer": ["consumer", "retail", "e-commerce", "shopping"],
+}
+
+LATER_STAGE_KEYWORDS = ["series a", "series b", "series c", "series d", "series e", "series f", "growth round", "late-stage"]
+
+
+def detect_industry(text):
+    """Detect the industry/sector from article text."""
+    text_lower = text.lower()
+    for industry, keywords in INDUSTRY_KEYWORDS.items():
+        if any(kw in text_lower for kw in keywords):
+            return industry
+    return "Other"
+
+
+def is_seed_stage(text):
+    """Check if the round is seed/pre-seed (not Series A or later)."""
+    text_lower = text.lower()
+    for kw in LATER_STAGE_KEYWORDS:
+        if kw in text_lower:
+            return False
+    return True
+
+
+def extract_company_description(text):
+    """Extract a clean 1-2 sentence description of what the company does."""
+    # Look for patterns that describe the company
+    patterns = [
+        r"(?:startup|company|firm|platform)\s+(?:that|which)\s+([^.]+\.)",
+        r"(?:develops?|builds?|creates?|offers?|provides?)\s+([^.]+\.)",
+        r"(?:is\s+(?:a|an)\s+)([^.]+(?:platform|service|solution|tool|software|app)[^.]*\.)",
+    ]
+
+    for pat in patterns:
+        match = re.search(pat, text, re.IGNORECASE)
+        if match:
+            desc = match.group(0).strip()
+            if 30 < len(desc) < 300:
+                return desc
+
+    # Fallback: find sentences mentioning what company does
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    for s in sentences[2:10]:  # Skip first couple (usually metadata)
+        s = s.strip()
+        if 50 < len(s) < 250 and any(word in s.lower() for word in ["develop", "build", "create", "offer", "provide", "platform", "solution", "help"]):
+            return s
+
+    # Last fallback: first substantive sentence
+    for s in sentences[:8]:
+        s = s.strip()
+        if 50 < len(s) < 250:
+            return s
+
+    return ""
+
+
 def extract_funding_details(text):
-    """Extract funding amount, investors, and description from article text."""
-    result = {"investors": "", "funding_amount": "", "description": ""}
+    """Extract funding amount, investors, industry, and description from article text."""
+    result = {"investors": "", "funding_amount": "", "description": "", "industry": "", "is_seed": True}
 
     # --- Funding amount ---
-    # Match patterns like $5 million, $5M, $5,000,000, $5.5 million
     amount_pattern = (
         r"\$\s?\d[\d,]*\.?\d*\s*(?:million|mln|mil|billion|bln|bil|thousand|[MBKmk])\b"
     )
@@ -129,16 +194,19 @@ def extract_funding_details(text):
     for pat in investor_patterns:
         for m in re.finditer(pat, text):
             name = m.group(1).strip().rstrip(",")
-            if name and name not in investors:
+            if name and name not in investors and len(name) < 50:
                 investors.append(name)
     if investors:
         result["investors"] = "; ".join(investors)
 
-    # --- Description (first 1-2 sentences) ---
-    sentences = re.split(r"(?<=[.!?])\s+", text)
-    desc_sentences = [s for s in sentences[:5] if len(s) > 30][:2]
-    if desc_sentences:
-        result["description"] = " ".join(desc_sentences)
+    # --- Industry ---
+    result["industry"] = detect_industry(text)
+
+    # --- Is seed stage? ---
+    result["is_seed"] = is_seed_stage(text)
+
+    # --- Clean description ---
+    result["description"] = extract_company_description(text)
 
     return result
 
@@ -152,11 +220,60 @@ def display_article(entry, source_name=""):
     print(f"Published:   {entry.get('published', 'N/A')}")
     if entry.get("_funding_amount"):
         print(f"Amount:      {entry['_funding_amount']}")
+    if entry.get("_industry"):
+        print(f"Industry:    {entry['_industry']}")
     if entry.get("_investors"):
         print(f"Investors:   {entry['_investors']}")
     if entry.get("_description"):
         print(f"Description: {entry['_description']}")
     print()
+
+
+def parse_amount_to_number(amount_str):
+    """Convert funding amount string to a number for summing."""
+    if not amount_str:
+        return 0
+    amount_str = amount_str.lower().replace(",", "").replace("$", "").strip()
+    multiplier = 1
+    if "billion" in amount_str or "bln" in amount_str or "bil" in amount_str or amount_str.endswith("b"):
+        multiplier = 1_000_000_000
+        amount_str = re.sub(r"(billion|bln|bil|b)\b", "", amount_str)
+    elif "million" in amount_str or "mln" in amount_str or "mil" in amount_str or amount_str.endswith("m"):
+        multiplier = 1_000_000
+        amount_str = re.sub(r"(million|mln|mil|m)\b", "", amount_str)
+    elif "thousand" in amount_str or amount_str.endswith("k"):
+        multiplier = 1_000
+        amount_str = re.sub(r"(thousand|k)\b", "", amount_str)
+    try:
+        return float(amount_str.strip()) * multiplier
+    except ValueError:
+        return 0
+
+
+def format_total_amount(total):
+    """Format a total amount nicely."""
+    if total >= 1_000_000_000:
+        return f"${total / 1_000_000_000:.1f}B"
+    elif total >= 1_000_000:
+        return f"${total / 1_000_000:.1f}M"
+    elif total >= 1_000:
+        return f"${total / 1_000:.1f}K"
+    else:
+        return f"${total:.0f}"
+
+
+def get_top_investors(articles, limit=5):
+    """Get the most frequently mentioned investors."""
+    investor_counts = {}
+    for a in articles:
+        investors = a.get("_investors", "")
+        if investors:
+            for inv in investors.split(";"):
+                inv = inv.strip()
+                if inv and len(inv) < 50:
+                    investor_counts[inv] = investor_counts.get(inv, 0) + 1
+    sorted_investors = sorted(investor_counts.items(), key=lambda x: x[1], reverse=True)
+    return sorted_investors[:limit]
 
 
 def send_email(articles):
@@ -166,35 +283,74 @@ def send_email(articles):
         print("GMAIL_APP_PASSWORD not set — skipping email.")
         return
 
-    subject = f"AI Seed Funding Alert: {len(articles)} new article(s)"
+    # Calculate summary stats
+    total_deals = len(articles)
+    total_funding = sum(parse_amount_to_number(a.get("_funding_amount", "")) for a in articles)
+    top_investors = get_top_investors(articles)
+
+    subject = f"AI Seed Funding Alert: {total_deals} new deal(s) - {format_total_amount(total_funding)} total"
+
+    # Build investor list for summary
+    investor_html = ""
+    if top_investors:
+        investor_items = [f"<li>{inv} ({count} deal{'s' if count > 1 else ''})</li>" for inv, count in top_investors]
+        investor_html = f"<ul style='margin:5px 0;padding-left:20px;'>{''.join(investor_items)}</ul>"
+    else:
+        investor_html = "<p style='margin:5px 0;color:#666;'>No investor data available</p>"
 
     rows = ""
     for a in articles:
+        desc = a.get('_description', '') or 'N/A'
+        if len(desc) > 200:
+            desc = desc[:200] + "..."
         rows += f"""
         <tr>
-            <td style="padding:8px;border:1px solid #ddd;">
-                <a href="{a.get('link', '')}">{a.get('title', '')}</a>
+            <td style="padding:12px;border:1px solid #e0e0e0;vertical-align:top;">
+                <a href="{a.get('link', '')}" style="color:#1a73e8;text-decoration:none;font-weight:500;">{a.get('title', '')}</a>
             </td>
-            <td style="padding:8px;border:1px solid #ddd;">{a.get('_source', '')}</td>
-            <td style="padding:8px;border:1px solid #ddd;">{a.get('_funding_amount', 'N/A')}</td>
-            <td style="padding:8px;border:1px solid #ddd;">{a.get('_investors', 'N/A')}</td>
-            <td style="padding:8px;border:1px solid #ddd;">{a.get('_description', '')}</td>
+            <td style="padding:12px;border:1px solid #e0e0e0;vertical-align:top;">{a.get('_source', '')}</td>
+            <td style="padding:12px;border:1px solid #e0e0e0;vertical-align:top;">{a.get('_industry', 'N/A')}</td>
+            <td style="padding:12px;border:1px solid #e0e0e0;vertical-align:top;font-weight:600;color:#2e7d32;">{a.get('_funding_amount', 'N/A')}</td>
+            <td style="padding:12px;border:1px solid #e0e0e0;vertical-align:top;">{a.get('_investors', 'N/A')}</td>
+            <td style="padding:12px;border:1px solid #e0e0e0;vertical-align:top;font-size:13px;color:#555;">{desc}</td>
         </tr>"""
 
     html = f"""\
     <html>
-    <body>
-    <h2>AI Seed Funding Tracker — {len(articles)} New Article(s)</h2>
-    <table style="border-collapse:collapse;width:100%;font-family:Arial,sans-serif;">
-        <tr style="background:#f4f4f4;">
-            <th style="padding:8px;border:1px solid #ddd;">Title</th>
-            <th style="padding:8px;border:1px solid #ddd;">Source</th>
-            <th style="padding:8px;border:1px solid #ddd;">Amount</th>
-            <th style="padding:8px;border:1px solid #ddd;">Investors</th>
-            <th style="padding:8px;border:1px solid #ddd;">Description</th>
+    <body style="font-family:Arial,sans-serif;max-width:1200px;margin:0 auto;padding:20px;">
+    <h2 style="color:#1a1a1a;border-bottom:2px solid #1a73e8;padding-bottom:10px;">
+        AI Seed Funding Tracker
+    </h2>
+
+    <div style="background:#f8f9fa;border-radius:8px;padding:20px;margin-bottom:20px;">
+        <h3 style="margin-top:0;color:#333;">Summary</h3>
+        <table style="width:100%;border-collapse:collapse;">
+            <tr>
+                <td style="padding:8px 0;width:33%;"><strong>Total Deals:</strong> {total_deals}</td>
+                <td style="padding:8px 0;width:33%;"><strong>Total Funding:</strong> {format_total_amount(total_funding)}</td>
+            </tr>
+        </table>
+        <div style="margin-top:10px;">
+            <strong>Top Investors:</strong>
+            {investor_html}
+        </div>
+    </div>
+
+    <table style="border-collapse:collapse;width:100%;font-size:14px;">
+        <tr style="background:#1a73e8;color:white;">
+            <th style="padding:12px;border:1px solid #1a73e8;text-align:left;">Title</th>
+            <th style="padding:12px;border:1px solid #1a73e8;text-align:left;">Source</th>
+            <th style="padding:12px;border:1px solid #1a73e8;text-align:left;">Industry</th>
+            <th style="padding:12px;border:1px solid #1a73e8;text-align:left;">Amount</th>
+            <th style="padding:12px;border:1px solid #1a73e8;text-align:left;">Investors</th>
+            <th style="padding:12px;border:1px solid #1a73e8;text-align:left;">Description</th>
         </tr>
         {rows}
     </table>
+
+    <p style="margin-top:20px;font-size:12px;color:#666;">
+        Generated by AI Seed Funding Tracker
+    </p>
     </body>
     </html>"""
 
@@ -236,10 +392,14 @@ def main():
                 text = fetch_article_text(url)
                 if text:
                     details = extract_funding_details(text)
+                    if not details["is_seed"]:
+                        print(f"    Skipping (not seed/pre-seed round)")
+                        continue
                     entry["_funding_amount"] = details["funding_amount"]
                     entry["_investors"] = details["investors"]
                     entry["_description"] = details["description"]
-        all_filtered.extend(filtered)
+                    entry["_industry"] = details["industry"]
+                    all_filtered.append(entry)
 
     if not all_filtered:
         print("No matching articles right now. Try again later!")
@@ -267,12 +427,13 @@ def main():
     with open(filename, "a", newline="") as f:
         writer = csv.writer(f)
         if not file_exists:
-            writer.writerow(["Title", "Source", "Link", "Published",
+            writer.writerow(["Title", "Source", "Industry", "Link", "Published",
                              "Funding Amount", "Investors", "Description"])
         for article in new_articles:
             writer.writerow([
                 article.get("title", ""),
                 article.get("_source", ""),
+                article.get("_industry", ""),
                 article.get("link", ""),
                 article.get("published", ""),
                 article.get("_funding_amount", ""),
