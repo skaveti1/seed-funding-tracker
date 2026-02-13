@@ -35,7 +35,12 @@ SEED_KEYWORDS = [
 ]
 
 # Words that indicate AI
-AI_KEYWORDS = ["artificial intelligence", " ai ", " ai-", " ai,", " ai."]
+AI_KEYWORDS = [
+    "artificial intelligence", " ai ", " ai-", " ai,", " ai.",
+    "machine learning", "deep learning", "neural network",
+    "llm", "large language model", "generative ai", "genai",
+    "agentic", "chatbot", "gpt", "claude", "openai", "anthropic",
+]
 
 
 def fetch_feed(url):
