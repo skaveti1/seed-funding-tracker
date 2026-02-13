@@ -80,11 +80,21 @@ def fetch_article_text(url):
         "User-Agent": (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        )
+            "Chrome/122.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0",
     }
     try:
-        resp = requests.get(url, headers=headers, timeout=15)
+        resp = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
         resp.raise_for_status()
     except requests.RequestException as e:
         print(f"  Could not fetch {url}: {e}")
@@ -404,7 +414,17 @@ def main():
                     entry["_investors"] = details["investors"]
                     entry["_description"] = details["description"]
                     entry["_industry"] = details["industry"]
-                    all_filtered.append(entry)
+                else:
+                    # Fallback: include article even if scraping failed
+                    print(f"    Could not scrape, using fallback")
+                    entry["_funding_amount"] = ""
+                    entry["_investors"] = ""
+                    # Clean HTML from summary
+                    summary = entry.get("summary", "")
+                    summary = re.sub(r"<[^>]+>", "", summary).strip()[:200]
+                    entry["_description"] = summary
+                    entry["_industry"] = detect_industry(entry.get("title", "") + " " + entry.get("summary", ""))
+                all_filtered.append(entry)
 
     if not all_filtered:
         print("No matching articles right now. Try again later!")
